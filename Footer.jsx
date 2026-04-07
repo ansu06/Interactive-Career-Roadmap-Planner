@@ -13,10 +13,34 @@ export default function Footer({ onNavigate }) {
         <div className="footer-col">
           <h3>Explore</h3>
           <ul>
-            <li><a href="#how-it-works">How It Works</a></li>
-            <li><a href="#features">Key Features</a></li>
-            <li><a href="#gap-section">Tutorial Hell Gap</a></li>
-            <li><a href="#why-this-project">Why This Project?</a></li>
+            <li><a href="#how-it-works" onClick={(e) => {
+              e.preventDefault();
+              onNavigate('home');
+              setTimeout(() => {
+                document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' });
+              }, 100);
+            }}>How It Works</a></li>
+            <li><a href="#features" onClick={(e) => {
+              e.preventDefault();
+              onNavigate('home');
+              setTimeout(() => {
+                document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' });
+              }, 100);
+            }}>Key Features</a></li>
+            <li><a href="#gap" onClick={(e) => {
+              e.preventDefault();
+              onNavigate('home');
+              setTimeout(() => {
+                document.getElementById('gap')?.scrollIntoView({ behavior: 'smooth' });
+              }, 100);
+            }}>Tutorial Hell Gap</a></li>
+            <li><a href="#why" onClick={(e) => {
+              e.preventDefault();
+              onNavigate('home');
+              setTimeout(() => {
+                document.getElementById('why')?.scrollIntoView({ behavior: 'smooth' });
+              }, 100);
+            }}>Why This Project?</a></li>
           </ul>
         </div>
         

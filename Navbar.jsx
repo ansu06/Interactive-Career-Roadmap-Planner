@@ -1,5 +1,5 @@
 // Navbar.jsx
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { auth } from './firebase';
 import { signOut } from 'firebase/auth';
 import './App.css';
@@ -14,8 +14,16 @@ export default function Navbar({ currentView, onNavigate, user, theme, toggleThe
     }
   };
 
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 30);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   return (
-    <nav className="global-navbar">
+    <nav className={`global-navbar ${scrolled ? 'navbar-scrolled' : ''}`}>
       <div className="nav-left">
         <div className="nav-logo" onClick={() => onNavigate('home')}>
           <span className="logo-icon">🚀</span>

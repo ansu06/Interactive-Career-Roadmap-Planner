@@ -1,5 +1,5 @@
 // LandingPage.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './App.css';
 
 function useCountUp(target, duration, shouldStart) {
@@ -23,10 +23,58 @@ function useCountUp(target, duration, shouldStart) {
   return count;
 }
 
+/* Hook: scroll-triggered reveal with IntersectionObserver (repeats every scroll) */
+function useScrollReveal(options = {}) {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        const children = el.querySelectorAll('.scroll-reveal-child');
+        if (entry.isIntersecting) {
+          el.classList.add('revealed');
+          children.forEach((child, i) => {
+            child.style.transitionDelay = `${i * 120}ms`;
+            child.classList.add('revealed');
+          });
+        } else {
+          // Remove classes so animation replays on next scroll-down
+          el.classList.remove('revealed');
+          children.forEach((child) => {
+            child.style.transitionDelay = '0ms';
+            child.classList.remove('revealed');
+          });
+        }
+      },
+      { threshold: options.threshold || 0.15, rootMargin: options.rootMargin || '0px 0px -40px 0px' }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return ref;
+}
+
 export default function LandingPage({ onNavigate }) {
   const [demoProgress, setDemoProgress] = useState(0);
   const [statsVisible, setStatsVisible] = useState(false);
   const statsRef = useRef(null);
+
+  // Scroll-reveal refs for each section
+  const heroRef = useScrollReveal({ threshold: 0.2 });
+  const statsRevealRef = useScrollReveal({ threshold: 0.2 });
+  const howItWorksRef = useScrollReveal({ threshold: 0.15 });
+  const demoRef = useScrollReveal({ threshold: 0.1 });
+  const featuresRef = useScrollReveal({ threshold: 0.1 });
+  const gapLeftRef = useScrollReveal({ threshold: 0.15 });
+  const gapRightRef = useScrollReveal({ threshold: 0.1 });
+  const whyRef = useScrollReveal({ threshold: 0.15 });
+  const ctaRef = useScrollReveal({ threshold: 0.2 });
+  const shortcutRef = useScrollReveal({ threshold: 0.3 });
 
   useEffect(() => {
     const timer = setTimeout(() => setDemoProgress(62), 800);
@@ -40,6 +88,12 @@ export default function LandingPage({ onNavigate }) {
     );
     if (statsRef.current) observer.observe(statsRef.current);
     return () => observer.disconnect();
+  }, []);
+
+  // Combine statsRef and statsRevealRef
+  const combinedStatsRef = useCallback((node) => {
+    statsRef.current = node;
+    statsRevealRef.current = node;
   }, []);
 
   const topicCount = useCountUp(120, 1200, statsVisible);
@@ -60,7 +114,8 @@ export default function LandingPage({ onNavigate }) {
 
   return (
     <div className="landing-container">
-      <div className="hero-section">
+      {/* Hero — fade up */}
+      <div className="hero-section scroll-reveal" ref={heroRef} data-reveal="up">
         <h1 className="hero-title">Engineer Your Future.</h1>
         <p className="hero-subtitle">Interactive, personalized developer roadmaps bridging the gap from beginner tutorials to production-ready engineering.</p>
         <div className="hero-cta-group">
@@ -69,45 +124,46 @@ export default function LandingPage({ onNavigate }) {
         </div>
       </div>
 
-      {/* Live Stats Counter */}
-      <div className="stats-counter" ref={statsRef}>
-        <div className="stat-block">
+      {/* Live Stats Counter — scale up */}
+      <div className="stats-counter scroll-reveal" ref={combinedStatsRef} data-reveal="scale">
+        <div className="stat-block scroll-reveal-child">
           <span className="stat-number">🚀 {topicCount}+</span>
           <span className="stat-label-text">Topics Covered</span>
         </div>
-        <div className="stat-block">
+        <div className="stat-block scroll-reveal-child">
           <span className="stat-number">👨‍💻 {pathCount}</span>
           <span className="stat-label-text">Career Paths</span>
         </div>
-        <div className="stat-block">
+        <div className="stat-block scroll-reveal-child">
           <span className="stat-number">🔥 {rateCount}%</span>
           <span className="stat-label-text">Completion Rate</span>
         </div>
-        <div className="stat-block">
+        <div className="stat-block scroll-reveal-child">
           <span className="stat-number">🌍 {userCount}+</span>
           <span className="stat-label-text">Active Learners</span>
         </div>
       </div>
 
-      <div className="how-it-works-section">
+      {/* How It Works — children stagger */}
+      <div id="how-it-works" className="how-it-works-section scroll-reveal" ref={howItWorksRef} data-reveal="up">
         <h2 className="section-title">How It Works</h2>
         <div className="steps-container">
-          <div className="step-card">
+          <div className="step-card scroll-reveal-child">
             <div className="step-number">1️⃣</div>
             <h3>Choose Career</h3>
             <p>Select from curated, industry-standard learning paths.</p>
           </div>
-          <div className="step-card">
+          <div className="step-card scroll-reveal-child">
             <div className="step-number">2️⃣</div>
             <h3>Follow Roadmap</h3>
             <p>Master specific topics scaled natively by difficulty.</p>
           </div>
-          <div className="step-card">
+          <div className="step-card scroll-reveal-child">
             <div className="step-number">3️⃣</div>
             <h3>Track Progress</h3>
             <p>Monitor your daily streaks and modules completed.</p>
           </div>
-          <div className="step-card">
+          <div className="step-card scroll-reveal-child">
             <div className="step-number">4️⃣</div>
             <h3>Become Job Ready 🚀</h3>
             <p>Build confidence and export your progress for recruiters!</p>
@@ -115,8 +171,8 @@ export default function LandingPage({ onNavigate }) {
         </div>
       </div>
 
-      {/* Live Demo Preview */}
-      <div className="demo-preview-section">
+      {/* Live Demo Preview — slide from right */}
+      <div className="demo-preview-section scroll-reveal" ref={demoRef} data-reveal="right">
         <h2 className="section-title">📊 See Your Progress in Real-Time</h2>
         <p className="demo-subtitle">Here's what your personalized dashboard looks like once you start tracking.</p>
 
@@ -174,10 +230,11 @@ export default function LandingPage({ onNavigate }) {
         </button>
       </div>
 
-      <div id="features" className="features-section">
+      {/* Features — children stagger from left */}
+      <div id="features" className="features-section scroll-reveal" ref={featuresRef} data-reveal="up">
         <h2 className="section-title">Features Breakdown</h2>
         <div className="features-grid">
-          <div className="feature-box">
+          <div className="feature-box scroll-reveal-child">
             <div className="feature-glow"></div>
             <span className="feature-icon">🔥</span>
             <h3>Daily Streak Engine</h3>
@@ -186,7 +243,7 @@ export default function LandingPage({ onNavigate }) {
               Learn More <span className="learn-more-arrow">→</span>
             </button>
           </div>
-          <div className="feature-box">
+          <div className="feature-box scroll-reveal-child">
             <div className="feature-glow"></div>
             <span className="feature-icon">🧠</span>
             <h3>AI-Curated Paths</h3>
@@ -195,7 +252,7 @@ export default function LandingPage({ onNavigate }) {
               Learn More <span className="learn-more-arrow">→</span>
             </button>
           </div>
-          <div className="feature-box">
+          <div className="feature-box scroll-reveal-child">
             <div className="feature-glow"></div>
             <span className="feature-icon">⏳</span>
             <h3>Smart Estimation</h3>
@@ -207,11 +264,11 @@ export default function LandingPage({ onNavigate }) {
         </div>
       </div>
 
-      {/* AI Learning Gap Section */}
-      <section className="learning-gap-section">
+      {/* AI Learning Gap Section — left side slides from left, right side slides from right */}
+      <section id="gap" className="learning-gap-section">
         <div className="gap-content-wrapper">
           
-          <div className="gap-left-side">
+          <div className="gap-left-side scroll-reveal" ref={gapLeftRef} data-reveal="left">
             <span className="gap-label-badge">The Learning Gap</span>
             <h2 className="gap-main-title">Breaking Free from 'Tutorial Hell'</h2>
             <p className="gap-main-desc">
@@ -229,10 +286,10 @@ export default function LandingPage({ onNavigate }) {
             </button>
           </div>
           
-          <div className="gap-right-side">
+          <div className="gap-right-side scroll-reveal" ref={gapRightRef} data-reveal="right">
             <div className="gap-timeline-path"></div>
             
-            <div className="gap-step-item">
+            <div className="gap-step-item scroll-reveal-child">
               <div className="gap-step-icon">😵</div>
               <div className="gap-step-card">
                 <h3>Disconnected Learning</h3>
@@ -240,7 +297,7 @@ export default function LandingPage({ onNavigate }) {
               </div>
             </div>
 
-            <div className="gap-step-item">
+            <div className="gap-step-item scroll-reveal-child">
               <div className="gap-step-icon">📉</div>
               <div className="gap-step-card">
                 <h3>The Persistence Gap</h3>
@@ -248,7 +305,7 @@ export default function LandingPage({ onNavigate }) {
               </div>
             </div>
 
-            <div className="gap-step-item">
+            <div className="gap-step-item scroll-reveal-child">
               <div className="gap-step-icon">🔥</div>
               <div className="gap-step-card">
                 <h3>Motivation Decay</h3>
@@ -256,7 +313,7 @@ export default function LandingPage({ onNavigate }) {
               </div>
             </div>
 
-            <div className="gap-step-item">
+            <div className="gap-step-item scroll-reveal-child">
               <div className="gap-step-icon">🎯</div>
               <div className="gap-step-card">
                 <h3>Lack of Focus</h3>
@@ -264,7 +321,7 @@ export default function LandingPage({ onNavigate }) {
               </div>
             </div>
 
-            <div className="gap-step-item gap-final-solution">
+            <div className="gap-step-item gap-final-solution scroll-reveal-child">
               <div className="gap-step-icon solution-check">✅</div>
               <div className="gap-step-card solution-card-active">
                 <h3>The Career Roadmap Solution</h3>
@@ -276,8 +333,8 @@ export default function LandingPage({ onNavigate }) {
         </div>
       </section>
 
-      {/* Why This Project */}
-      <div className="why-section">
+      {/* Why This Project — slide from left */}
+      <div id="why" className="why-section scroll-reveal" ref={whyRef} data-reveal="left">
         <div className="why-content">
           <div className="why-text">
             <h2 className="section-title" style={{ textAlign: 'left' }}>Why This Project?</h2>
@@ -289,27 +346,27 @@ export default function LandingPage({ onNavigate }) {
             </p>
           </div>
           <div className="why-checklist">
-            <div className="why-check-item">
+            <div className="why-check-item scroll-reveal-child">
               <span className="why-check-icon">✔</span>
               <span>Structured learning paths designed by industry standards</span>
             </div>
-            <div className="why-check-item">
+            <div className="why-check-item scroll-reveal-child">
               <span className="why-check-icon">✔</span>
               <span>Real-time progress tracking with visual analytics</span>
             </div>
-            <div className="why-check-item">
+            <div className="why-check-item scroll-reveal-child">
               <span className="why-check-icon">✔</span>
               <span>Daily streak motivation to build consistent habits</span>
             </div>
-            <div className="why-check-item">
+            <div className="why-check-item scroll-reveal-child">
               <span className="why-check-icon">✔</span>
               <span>Beginner → Intermediate → Advanced roadmap flow</span>
             </div>
-            <div className="why-check-item">
+            <div className="why-check-item scroll-reveal-child">
               <span className="why-check-icon">✔</span>
               <span>Export progress reports for resumes & interviews</span>
             </div>
-            <div className="why-check-item">
+            <div className="why-check-item scroll-reveal-child">
               <span className="why-check-icon">✔</span>
               <span>Multi-user accounts with isolated cloud-ready storage</span>
             </div>
@@ -317,8 +374,8 @@ export default function LandingPage({ onNavigate }) {
         </div>
       </div>
 
-      {/* Final Call-To-Action */}
-      <div className="final-cta-section">
+      {/* Final Call-To-Action — scale up */}
+      <div className="final-cta-section scroll-reveal" ref={ctaRef} data-reveal="scale">
         <h2 className="final-cta-title">Start Your Journey Today 🚀</h2>
         <p className="final-cta-sub">Join hundreds of learners building real careers through structured, trackable roadmaps.</p>
         <button className="final-cta-btn" onClick={() => onNavigate('login')}>
@@ -326,8 +383,8 @@ export default function LandingPage({ onNavigate }) {
         </button>
       </div>
 
-      {/* Keyboard Shortcut Hints */}
-      <div className="shortcut-hints">
+      {/* Keyboard Shortcut Hints — fade up */}
+      <div className="shortcut-hints scroll-reveal" ref={shortcutRef} data-reveal="up">
         <span className="shortcut-label">💡 Pro Tips:</span>
         <div className="shortcut-keys">
           <div className="shortcut-item"><kbd>R</kbd> Reset Progress</div>

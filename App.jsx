@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { auth } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { loadUserData, saveUserData } from './firestoreHelpers';
 import Login from './Login';
 import LandingPage from './LandingPage';
 import Navbar from './Navbar';
@@ -179,6 +180,15 @@ export default function App() {
   );
 }
 
+// Audio system - Singleton context to prevent browser blocking
+let sharedAudioCtx = null;
+const getAudioCtx = () => {
+  if (!sharedAudioCtx) {
+    sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  return sharedAudioCtx;
+};
+
 function Dashboard({ user }) {
   const handleLogout = async () => {
     try {
@@ -188,6 +198,7 @@ function Dashboard({ user }) {
     }
   };
 
+  // ---- State (initialized from localStorage for instant UI) ----
   const [selectedCareer, setSelectedCareer] = useState(() => {
     return localStorage.getItem(`roadmap-career-${user.uid}`) || 'frontend';
   });
@@ -195,11 +206,6 @@ function Dashboard({ user }) {
     const saved = localStorage.getItem(`roadmap-progress-${user.uid}`);
     return saved ? JSON.parse(saved) : {};
   });
-
-  useEffect(() => {
-    localStorage.setItem(`roadmap-career-${user.uid}`, selectedCareer);
-  }, [selectedCareer, user.uid]);
-
   const [streak, setStreak] = useState(() => {
     const saved = localStorage.getItem(`roadmap-streak-${user.uid}`);
     return saved ? JSON.parse(saved) : { count: 0, lastDate: null };
@@ -208,6 +214,51 @@ function Dashboard({ user }) {
   const [filterLevel, setFilterLevel] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedTips, setExpandedTips] = useState({});
+
+  // ---- Firestore sync ----
+  const [firestoreLoading, setFirestoreLoading] = useState(true);
+  const initialLoadDone = useRef(false); // prevents save-on-load loop
+
+  // Load from Firestore on mount (overrides localStorage if data exists)
+  useEffect(() => {
+    async function fetchData() {
+      const data = await loadUserData(user.uid);
+      if (data) {
+        if (data.progress) {
+          setProgress(data.progress);
+          localStorage.setItem(`roadmap-progress-${user.uid}`, JSON.stringify(data.progress));
+        }
+        if (data.streak) {
+          setStreak(data.streak);
+          localStorage.setItem(`roadmap-streak-${user.uid}`, JSON.stringify(data.streak));
+        }
+        if (data.selectedCareer) {
+          setSelectedCareer(data.selectedCareer);
+          localStorage.setItem(`roadmap-career-${user.uid}`, data.selectedCareer);
+        }
+      }
+      setFirestoreLoading(false);
+      // Small delay so the state updates settle before we start watching for saves
+      setTimeout(() => { initialLoadDone.current = true; }, 500);
+    }
+    fetchData();
+  }, [user.uid]);
+
+  // Debounced save to Firestore (1.5s after last change)
+  useEffect(() => {
+    if (!initialLoadDone.current) return; // skip the initial load
+
+    const timer = setTimeout(() => {
+      saveUserData(user.uid, { progress, streak, selectedCareer });
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [progress, streak, selectedCareer, user.uid]);
+
+  // ---- Keep localStorage in sync (instant UI) ----
+  useEffect(() => {
+    localStorage.setItem(`roadmap-career-${user.uid}`, selectedCareer);
+  }, [selectedCareer, user.uid]);
 
   useEffect(() => {
     localStorage.setItem(`roadmap-progress-${user.uid}`, JSON.stringify(progress));
@@ -237,9 +288,11 @@ function Dashboard({ user }) {
     });
   };
 
-  const playTickSound = () => {
+  const playTickSound = async () => {
     try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const ctx = getAudioCtx();
+      if (ctx.state === 'suspended') await ctx.resume();
+      
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain);
@@ -250,12 +303,14 @@ function Dashboard({ user }) {
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
       osc.start(ctx.currentTime);
       osc.stop(ctx.currentTime + 0.15);
-    } catch (e) {}
+    } catch (e) { console.warn("Audio play blocked", e); }
   };
 
-  const playUndoSound = () => {
+  const playUndoSound = async () => {
     try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const ctx = getAudioCtx();
+      if (ctx.state === 'suspended') await ctx.resume();
+
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain);
@@ -266,7 +321,7 @@ function Dashboard({ user }) {
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
       osc.start(ctx.currentTime);
       osc.stop(ctx.currentTime + 0.12);
-    } catch (e) {}
+    } catch (e) { console.warn("Audio play blocked", e); }
   };
 
   const handleToggle = (stepId) => {
@@ -363,6 +418,11 @@ function Dashboard({ user }) {
 
   const [displayPercentage, setDisplayPercentage] = useState(progressPercentage);
 
+  // Reset display percentage instantly when switching career paths to keep progress separate
+  useEffect(() => {
+    setDisplayPercentage(progressPercentage);
+  }, [selectedCareer]);
+
   useEffect(() => {
     let start = displayPercentage;
     const end = progressPercentage;
@@ -396,6 +456,24 @@ function Dashboard({ user }) {
     return `🏆 Amazing! You have mastered all ${total} topics in this roadmap!`;
   };
 
+  // Show loading state while fetching Firestore data
+  if (firestoreLoading) {
+    return (
+      <div className="app-container">
+        <div style={{
+          textAlign: 'center',
+          marginTop: '8rem',
+          color: 'var(--text-secondary)',
+          fontSize: '1.1rem',
+          fontWeight: 600
+        }}>
+          <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>🔄</div>
+          Loading your progress from the cloud...
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="app-container">
       <header className="header">
@@ -421,7 +499,6 @@ function Dashboard({ user }) {
               id="career-select"
               value={selectedCareer} 
               onChange={(e) => {
-                setProgress({});
                 setSelectedCareer(e.target.value);
                 setFilterLevel('All');
                 setSearchQuery('');
@@ -571,22 +648,25 @@ function Dashboard({ user }) {
                     </span>
                     <span className="time-badge">⏱️ {step.time}</span>
                   </div>
-                  <div 
-                    className="card-tip-toggle" 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setExpandedTips(prev => ({ ...prev, [step.id]: !prev[step.id] }));
-                    }}
-                  >
-                    <span className="tip-icon">💡</span> 
-                    {expandedTips[step.id] ? 'Hide Learning Tip' : 'View Learning Tip'}
-                  </div>
-                  {expandedTips[step.id] && (
-                    <div className="card-tip">
-                      {step.tip}
+                  
+                  {step.tip && (
+                    <div className="card-footer">
+                      <button 
+                        className="text-toggle-btn"
+                        onClick={(e) => {
+                          e.stopPropagation(); // Don't trigger toggle when clicking Tip
+                          setExpandedTips(prev => ({ ...prev, [step.id]: !prev[step.id] }));
+                        }}
+                      >
+                        {expandedTips[step.id] ? '📖 Hide Tip' : '💡 View Tip'}
+                      </button>
+                      {expandedTips[step.id] && (
+                        <p className="card-tip-text">{step.tip}</p>
+                      )}
                     </div>
                   )}
                 </div>
+
                 <div className="checkbox-wrapper">
                   <input 
                     type="checkbox" 
