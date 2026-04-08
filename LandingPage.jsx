@@ -1,6 +1,6 @@
-// LandingPage.jsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './App.css';
+import frustratedLearner from './public/frustrated_learner.png';
 
 function useCountUp(target, duration, shouldStart) {
   const [count, setCount] = useState(0);
@@ -276,7 +276,7 @@ export default function LandingPage({ onNavigate }) {
             </p>
             <div className="gap-hero-image-box">
               <img 
-                src="/frustrated_learner.png" 
+                src={frustratedLearner} 
                 alt="Frustrated student using AI" 
                 className="gap-hero-img" 
               />
