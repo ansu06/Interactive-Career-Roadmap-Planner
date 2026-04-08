@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { auth } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { loadUserData, saveUserData } from './firestoreHelpers';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import Login from './Login';
 import LandingPage from './LandingPage';
 import Navbar from './Navbar';
@@ -175,7 +176,7 @@ export default function App() {
         {currentView === 'dashboard' && user && <div className="page-padding"><Dashboard user={user} /></div>}
         {currentView === 'dashboard' && !user && <div className="page-padding"><Login /></div>}
       </div>
-      {currentView !== 'dashboard' && <Footer onNavigate={setCurrentView} />}
+      {currentView === 'home' && <Footer onNavigate={setCurrentView} />}
     </>
   );
 }
@@ -229,8 +230,13 @@ function Dashboard({ user }) {
           localStorage.setItem(`roadmap-progress-${user.uid}`, JSON.stringify(data.progress));
         }
         if (data.streak) {
-          setStreak(data.streak);
-          localStorage.setItem(`roadmap-streak-${user.uid}`, JSON.stringify(data.streak));
+          // Ensure streak is at least 1 as per new requirement
+          const correctedStreak = { 
+            ...data.streak, 
+            count: Math.max(data.streak.count || 0, 1) 
+          };
+          setStreak(correctedStreak);
+          localStorage.setItem(`roadmap-streak-${user.uid}`, JSON.stringify(correctedStreak));
         }
         if (data.selectedCareer) {
           setSelectedCareer(data.selectedCareer);
@@ -243,6 +249,17 @@ function Dashboard({ user }) {
     }
     fetchData();
   }, [user.uid]);
+
+  const resetProgress = async () => {
+    if (window.confirm("Are you sure you want to reset ALL your progress? This cannot be undone.")) {
+      setProgress({});
+      setStreak({ count: 1, lastDate: new Date().toLocaleDateString() });
+      setDisplayPercentage(0);
+      localStorage.setItem(`roadmap-progress-${user.uid}`, JSON.stringify({}));
+      localStorage.setItem(`roadmap-streak-${user.uid}`, JSON.stringify({ count: 1, lastDate: new Date().toLocaleDateString() }));
+      await saveUserData(user.uid, { progress: {}, streak: { count: 1, lastDate: new Date().toLocaleDateString() }, selectedCareer });
+    }
+  };
 
   // Debounced save to Firestore (1.5s after last change)
   useEffect(() => {
@@ -389,16 +406,21 @@ function Dashboard({ user }) {
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return;
+      // Don't trigger shortcuts if user is typing in an input
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
       const key = e.key.toLowerCase();
+      
       if (key === 'r') {
-        setProgress({});
+        e.preventDefault();
+        resetProgress();
       } else if (key === 'c') {
+        e.preventDefault();
         if (nextStep) {
           handleToggle(nextStep.id);
         }
       } else if (key === 'e') {
+        e.preventDefault();
         exportProgress();
       }
     };
@@ -447,6 +469,51 @@ function Dashboard({ user }) {
     return () => clearInterval(timer);
   }, [progressPercentage]);
 
+  // Chart Component
+  const SkillChart = ({ completed, remaining }) => {
+    const data = [
+      { name: 'Completed', value: completed, color: '#6366f1' },
+      { name: 'Remaining', value: remaining, color: 'rgba(255,255,255,0.05)' }
+    ];
+
+    if (completed === 0 && remaining === 0) return null;
+
+    return (
+      <div className="chart-container">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={data}
+              innerRadius="65%"
+              outerRadius="90%"
+              paddingAngle={5}
+              dataKey="value"
+              stroke="none"
+              animationBegin={0}
+              animationDuration={800}
+            >
+              {data.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.color} />
+              ))}
+            </Pie>
+            <Tooltip 
+              contentStyle={{ 
+                background: 'var(--bg-secondary)', 
+                border: '1px solid var(--bg-tertiary)',
+                borderRadius: '8px',
+                fontSize: '12px'
+              }}
+              itemStyle={{ color: 'var(--text-primary)' }}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="chart-center-label">
+          <span className="chart-pct">{progressPercentage}%</span>
+        </div>
+      </div>
+    );
+  };
+
   const getMotivationalText = (percentage, completed, total) => {
     const baseText = `You completed ${completed} out of ${total} topics.`;
     if (percentage === 0) return `🚀 Ready to start? Let's go!`;
@@ -482,12 +549,10 @@ function Dashboard({ user }) {
             <h1>Career Roadmap Planner</h1>
             <div className="header-subtitle-row">
               <p className="subtitle">👋 Welcome back, {user.displayName || user.email.split('@')[0]}! Keep building your future 🚀</p>
-              {streak.count > 0 && (
-                <div className="streak-badge">
-                  <span className="streak-icon">🔥</span>
-                  <span className="streak-count">{streak.count} Day Streak</span>
-                </div>
-              )}
+              <div className={`streak-badge ${streak.count > 0 ? 'active' : ''}`}>
+                <span className="streak-icon">🔥</span>
+                <span className="streak-count">{streak.count} Day Streak</span>
+              </div>
             </div>
           </div>
         </div>
@@ -503,6 +568,7 @@ function Dashboard({ user }) {
                 setFilterLevel('All');
                 setSearchQuery('');
                 setExpandedTips({});
+                e.target.blur();
               }}
             >
               {Object.entries(ROADMAPS).map(([key, roadmap]) => (
@@ -526,14 +592,23 @@ function Dashboard({ user }) {
       <main className="main-content">
         <div className="progress-section">
           <div className="progress-header">
-            <div className="progress-title-wrapper">
-              <h2>📊 Progress:</h2>
-              <span className="progress-text">{displayPercentage}%</span>
-              <div className={`milestone-badge ${currentMilestone.class}`}>
-                <span className="milestone-icon">{currentMilestone.icon}</span>
-                {currentMilestone.label}
+            <div className="progress-main-row">
+              <div className="progress-title-wrapper">
+                <h2>📊 Progress:</h2>
+                <div className="progress-info-row">
+                  <span className="progress-text">{displayPercentage}%</span>
+                  <div className={`milestone-badge ${currentMilestone.class}`}>
+                    <span className="milestone-icon">{currentMilestone.icon}</span>
+                    {currentMilestone.label}
+                  </div>
+                </div>
               </div>
+              <SkillChart 
+                completed={completedCount} 
+                remaining={steps.length - completedCount} 
+              />
             </div>
+            
             <div className="progress-stats">
               <div className="analytical-stats">
                 <div className="stat-item">
