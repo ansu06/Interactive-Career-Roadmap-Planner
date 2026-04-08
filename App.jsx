@@ -612,15 +612,18 @@ function Dashboard({ user }) {
             <div className="progress-stats">
               <div className="analytical-stats">
                 <div className="stat-item">
-                  <span className="stat-label">🎯 Goal</span>
+                  <span className="stat-emoji">🎯</span>
+                  <span className="stat-label">Goal</span>
                   <span className="stat-value">{steps.length}</span>
                 </div>
                 <div className="stat-item">
-                  <span className="stat-label">✅ Completed</span>
+                  <span className="stat-emoji">✅</span>
+                  <span className="stat-label">Completed</span>
                   <span className="stat-value">{completedCount}</span>
                 </div>
                 <div className="stat-item highlight">
-                  <span className="stat-label">⏳ Remaining</span>
+                  <span className="stat-emoji">⏳</span>
+                  <span className="stat-label">Remaining</span>
                   <span className="stat-value">{steps.length - completedCount}</span>
                 </div>
               </div>
